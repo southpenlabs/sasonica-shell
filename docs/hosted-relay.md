@@ -277,14 +277,14 @@ key passed in, as check runs (a step's log can't be read until the job
 ends); red5 signed in as `sasonica-test2` with headless Chromium and pressed
 Join. Results:
 
-- [Run 37701441963](https://github.com/davidj4tech/sasonica-shell/actions/runs/37701441963):
+- [Run 37701441963](https://github.com/southpenlabs/sasonica-shell/actions/runs/37701441963):
   joined; the installer's smoke test queued `echo sasonica-ok` through the
   hosted relay and read it back; the Scheduled Task reported **Running**
   (the worry that an Interactive task would sit at Ready on a runner with no
   one logged on didn't happen); the connector URL printed as `<secret>`.
   The job then failed on the workflow's own bug (an empty ExitCode from
   Start-Process without its handle held), fixed in 2e6dba9.
-- [Run 37701570159](https://github.com/davidj4tech/sasonica-shell/actions/runs/37701570159):
+- [Run 37701570159](https://github.com/southpenlabs/sasonica-shell/actions/runs/37701570159):
   all steps green. The Join page replaced the first run's machine ("Removed
   from your relay: runnervmfi6oq"; its tenant then 404). An MCP client on
   red5 (initialize, then `tools/call run_command`) ran `hostname; uname -a;

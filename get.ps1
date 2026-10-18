@@ -22,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'     # Invoke-WebRequest's bar makes it many times slower
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$zip = if ($env:SASONICA_GET_ZIP) { $env:SASONICA_GET_ZIP } else { 'https://github.com/davidj4tech/sasonica-shell/archive/refs/heads/main.zip' }
+$zip = if ($env:SASONICA_GET_ZIP) { $env:SASONICA_GET_ZIP } else { 'https://github.com/southpenlabs/sasonica-shell/archive/refs/heads/main.zip' }
 $dest = Join-Path $env:LOCALAPPDATA 'sasonica\shell'
 
 Write-Host "`n==> Downloading Sasonica Shell"
