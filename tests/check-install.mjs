@@ -11,7 +11,7 @@ import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'no
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, renderRecord, OAUTH_KV_MARKER, oauthKvLine, ownerPolicyBody, accessAppBody,
+import { siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, renderRecord, OAUTH_KV_MARKER, oauthKvLine, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, ownerPolicyBody, accessAppBody,
          winShellCommand, needsWindowsShell } from '../lib/install-lib.mjs';
 import { plist } from '../lib/service-macos.mjs';
 import { taskCommand } from '../lib/service-windows.mjs';
@@ -205,6 +205,25 @@ const cases = {
   invocationLogsStayOff() {
     const tpl = readFileSync(path.join(ROOT, 'worker', 'wrangler.jsonc.template'), 'utf8');
     assert.match(tpl, /"invocation_logs":\s*false/, 'invocation logs would record the secret URL');
+  },
+
+  // SASONICA_CUSTOM_DOMAIN: the route line in place of the template's marker,
+  // a hostname and nothing else, and kept in the env file for a re-run.
+  customDomainShapes() {
+    const tpl = readFileSync(path.join(ROOT, 'worker', 'wrangler.jsonc.template'), 'utf8');
+    assert.ok(tpl.includes(CUSTOM_DOMAIN_MARKER), 'the template has the marker the installer replaces');
+    assert.match(tpl.replace(CUSTOM_DOMAIN_MARKER, customDomainLine('shell-box.example.com')),
+      /"routes": \[\{ "pattern": "shell-box\.example\.com", "custom_domain": true \}\],/);
+    assert.equal(customDomain(''), '');
+    assert.equal(customDomain(undefined), '');
+    assert.equal(customDomain(' https://Shell-Box.Example.com/ '), 'shell-box.example.com');
+    for (const bad of ['box', 'shell box.example.com', 'example.com/mcp', 'a"b.example.com', '-x.example.com']) {
+      assert.throws(() => customDomain(bad), /SASONICA_CUSTOM_DOMAIN/, bad);
+    }
+    assert.match(renderEnv({ customDomain: 'shell-box.example.com' }), /^SASONICA_CUSTOM_DOMAIN=shell-box\.example\.com$/m);
+    assert.ok(!renderEnv({}).includes('SASONICA_CUSTOM_DOMAIN'), 'off unless given');
+    const src = readFileSync(path.join(ROOT, 'install.mjs'), 'utf8');
+    assert.match(src, /domain \? `https:\/\/\$\{domain\}`/, 'the env file and the smoke test use the name');
   },
 
   // OAuth (docs/tools-and-approvals.md §6): what the installer asks Cloudflare

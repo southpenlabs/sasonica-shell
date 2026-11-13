@@ -136,6 +136,8 @@ Re-running the installer is safe. Existing IDs and secrets are reused unless you
 
 **Beside Sasonica's server** (agent-media's `sasonica` binary) there is one `sasonica` command, the server's. The installer then writes no command of Shell's own (and removes the `sasonica-shell` one an earlier version wrote); it records where the runner is, in `~/.config/sasonica/runner` (`%APPDATA%\sasonica\runner`: the node, then `sasonica.mjs`), and the server runs Shell from there: `sasonica shell …` with any arguments (`sasonica shell --help`, `sasonica shell install`, `sasonica shell --once`), and Shell's own words — `sasonica status`, `skills`, `tools`, `url`, `client`, `sign` — go to Shell by themselves. `sasonica pair`, `devices`, `install` and `help` are the server's. The service runs node and the runner directly, so it is the same either way. A Shell installed before the server is taken in the same way when the server installs.
 
+To put the Worker on a name of your own instead of `workers.dev`, set `SASONICA_CUSTOM_DOMAIN=shell-mybox.example.com` for the install: a hostname one label under a zone on the same Cloudflare account. The deploy attaches it (Cloudflare makes the DNS record and the certificate), the `workers.dev` address is turned off, and the name is kept in `~/.config/sasonica/env` for re-runs. The API token then also needs that zone's `Workers Routes: Edit`. A connector signed in on the old address has to be added again on the new one.
+
 Several machines can share one Cloudflare account. Each gets its own Worker and D1 database named `sasonica-shell-<site>`; the site name defaults to the hostname. Copy `install.conf.example` to `install.conf` if you want to pre-answer the installer prompts.
 
 ## Security model

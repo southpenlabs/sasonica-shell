@@ -14,3 +14,9 @@ CLOUDFLARE_API_TOKEN=
 # A short name for this machine. Goes into the Worker and database names
 # (sasonica-shell-<site>) so several machines can share one account.
 SASONICA_SITE=
+
+# Optional: the Worker on a name of your own instead of
+# <worker>.<account>.workers.dev. A hostname one label under a zone on the
+# same Cloudflare account (shell-mybox.example.com); the token then also
+# needs that zone's Workers Routes: Edit. The workers.dev address is off.
+#SASONICA_CUSTOM_DOMAIN=

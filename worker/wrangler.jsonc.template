@@ -14,6 +14,8 @@
   // Workers Logs for seven days. The Worker's own console lines stay on, and
   // none of them prints a secret. tests/check-install.mjs holds this.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+  // install.mjs puts the custom domain's route here when SASONICA_CUSTOM_DOMAIN is set.
+  // __CUSTOM_DOMAIN__
   // install.mjs puts the OAuth KV binding here when SASONICA_OWNER_EMAIL is set.
   // __OAUTH_KV__
   "d1_databases": [

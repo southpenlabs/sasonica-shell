@@ -30,7 +30,7 @@ import path from 'node:path';
 import { cfRequest } from './lib/cloudflare.mjs';
 import { DEFAULT_RELAY, joinRelay, openBrowser } from './lib/hosted-join.mjs';
 import { hex, siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, isOwnShim, RECORD, renderRecord, connectorUrl,
-         winShellCommand, needsWindowsShell, OAUTH_KV_MARKER, oauthKvLine, ownerPolicyBody,
+         winShellCommand, needsWindowsShell, OAUTH_KV_MARKER, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, oauthKvLine, ownerPolicyBody,
          accessAppBody } from './lib/install-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -163,6 +163,11 @@ if (signin && !['app', 'access'].includes(signin)) {
   console.error(`SASONICA_SIGNIN is 'app' or 'access', not ${signin}`);
   process.exit(1);
 }
+// A name of your own for the Worker (lib/install-lib.mjs customDomain). Kept
+// in the env file, so a re-run keeps the Worker where its connectors are.
+let domain = '';
+try { domain = customDomain(process.env.SASONICA_CUSTOM_DOMAIN || existing.SASONICA_CUSTOM_DOMAIN); }
+catch (e) { console.error(e.message); process.exit(1); }
 const oauth = signin === 'app' || !!ownerEmail;
 if (ownerEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ownerEmail)) {
   console.error(`SASONICA_OWNER_EMAIL is not an email: ${ownerEmail}`);
@@ -316,6 +321,7 @@ writeText(path.join(HERE, 'worker', 'wrangler.jsonc'),
   readFileSync(path.join(HERE, 'worker', 'wrangler.jsonc.template'), 'utf8')
     .replace('__WORKER_NAME__', workerName).replace('__ACCOUNT_ID__', accountId)
     .replace('__DB_NAME__', dbName).replace('__DB_ID__', dbId)
+    .replace(CUSTOM_DOMAIN_MARKER, domain ? customDomainLine(domain) : CUSTOM_DOMAIN_MARKER)
     .replace(OAUTH_KV_MARKER, kvId ? oauthKvLine(kvId) : OAUTH_KV_MARKER));
 if (wrangler(['d1', 'execute', dbName, '--remote', '--file', path.join(HERE, 'schema.sql')], { capture: true }).code !== 0) {
   die('applying schema.sql failed');
@@ -390,7 +396,8 @@ if (!sub) {
   await cf(`/accounts/${accountId}/workers/subdomain`, { method: 'PUT', body: { subdomain: sub }, token });
   note(`registered workers.dev subdomain: ${sub}`);
 }
-const workerUrl = `https://${workerName}.${sub}.workers.dev`;
+const workerUrl = domain ? `https://${domain}` : `https://${workerName}.${sub}.workers.dev`;
+if (domain) note(`the Worker will answer at ${workerUrl} (not on workers.dev)`);
 
 // --- 6b. OAuth: the Access app that signs the owner in (only with SASONICA_OWNER_EMAIL)
 if (signin === 'app') {
@@ -452,7 +459,7 @@ say(`Writing ${ENV_FILE}`);
 // through the Worker, and a D1 API token is account-wide: one left on every
 // machine would reach every other machine's queue.
 writeText(ENV_FILE, renderEnv({
-  accountId, site, workerName, dbName, dbId, secret, workerUrl, runnerToken, keyFile: KEY_FILE, ownerEmail, signin: signin === 'app' ? 'app' : '',
+  accountId, site, workerName, dbName, dbId, secret, workerUrl, runnerToken, keyFile: KEY_FILE, ownerEmail, customDomain: HOSTED ? '' : domain, signin: signin === 'app' ? 'app' : '',
   hosted: HOSTED ? (process.env.SASONICA_RELAY_URL || existing.SASONICA_RELAY_URL || DEFAULT_RELAY) : '',
 }), 0o600);
 mkdirSync(path.join(CONF, 'skills'), { recursive: true });
@@ -507,7 +514,9 @@ const mcp = `${workerUrl}/${secret}/mcp`;
 const rpc = (id, name, argsObj) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: argsObj } });
 let queued = null;
 // A fresh deploy takes a few seconds to reach every edge.
-for (let i = 1; i <= 12; i++) {
+// A name of its own also waits for its DNS record and certificate.
+const tries = domain && !HOSTED ? 48 : 12;
+for (let i = 1; i <= tries; i++) {
   try {
     const r = await fetch(mcp, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(rpc(1, 'run_command', { command: 'echo sasonica-ok', wait: 0 })) });
@@ -516,7 +525,7 @@ for (let i = 1; i <= 12; i++) {
   note(`waiting for the deploy to propagate (${i * 5}s)`);
   await new Promise((r) => setTimeout(r, 5000));
 }
-if (!queued) die(`the Worker did not answer at ${mcp} after a minute`);
+if (!queued) die(`the Worker did not answer at ${mcp} after ${tries * 5} seconds`);
 const rid = /#(\d+)/.exec(queued.result?.content?.[0]?.text ?? '')?.[1];
 if (!rid) die(`unexpected Worker reply: ${JSON.stringify(queued)}`);
 const once = run(process.execPath, [RUNNER, '--once'], { capture: true });
