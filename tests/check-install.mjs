@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, renderRecord, OAUTH_KV_MARKER, oauthKvLine, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, ownerPolicyBody, accessAppBody,
          winShellCommand, needsWindowsShell } from '../lib/install-lib.mjs';
@@ -205,6 +206,18 @@ const cases = {
   invocationLogsStayOff() {
     const tpl = readFileSync(path.join(ROOT, 'worker', 'wrangler.jsonc.template'), 'utf8');
     assert.match(tpl, /"invocation_logs":\s*false/, 'invocation logs would record the secret URL');
+  },
+
+  // --local makes no Cloudflare call and refuses an env file that lacks what
+  // the other machine should have made.
+  localHalfNeedsTheCopiedFiles() {
+    const conf = mkdtempSync(path.join(tmpdir(), 'sasonica-local-'));
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'install.mjs'), '--local', '--no-service'],
+      { env: { PATH: process.env.PATH, HOME: conf, SASONICA_CONF: conf }, encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /--local needs SASONICA_WORKER_URL, SASONICA_URL_SECRET, SASONICA_RUNNER_TOKEN/);
+    assert.ok(!/Cloudflare API token/.test(r.stdout), 'it asked for a token');
+    rmSync(conf, { recursive: true, force: true });
   },
 
   // SASONICA_CUSTOM_DOMAIN: the route line in place of the template's marker,

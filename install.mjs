@@ -7,6 +7,12 @@
 //   node install.mjs                 interactive: asks for the token if not in env
 //   node install.mjs --no-service    everything except registering the runner
 //   node install.mjs --print-url     print this machine's connector URL and exit
+//   node install.mjs --local         this machine's half only: the Worker was
+//                                    made elsewhere (a token that only works
+//                                    from another machine) and its env file
+//                                    and relay.key were copied here; no
+//                                    Cloudflare call, then the command, the
+//                                    smoke test and the service as usual
 //   node install.mjs --hosted        no Cloudflare account: join South Pen Labs'
 //                                    hosted relay by signing in with a Sasonica
 //                                    account (SASONICA_RELAY_URL to use another)
@@ -45,6 +51,7 @@ const args = new Set(process.argv.slice(2));
 const NO_SERVICE = args.has('--no-service');
 const PRINT_URL = args.has('--print-url');
 let HOSTED = args.has('--hosted');
+const LOCAL = args.has('--local');
 
 // --- config files ------------------------------------------------------------
 // Windows has no XDG; %APPDATA% is where per-user config belongs there.
@@ -180,8 +187,23 @@ if (ownerEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ownerEmail)) {
 // service -- is the same for both.
 let accountId = '', dbId = '';
 let secret, runnerToken, workerUrl;
-if (HOSTED) ({ secret, runnerToken, workerUrl } = await joinHosted());
+if (LOCAL) ({ accountId, dbId, secret, runnerToken, workerUrl } = alreadyProvisioned());
+else if (HOSTED) ({ secret, runnerToken, workerUrl } = await joinHosted());
 else ({ accountId, dbId, secret, runnerToken, workerUrl } = await provision());
+
+// --local: everything the Cloudflare half would have made is already in the
+// env file and relay.key, copied from the machine that ran it.
+function alreadyProvisioned() {
+  const need = ['SASONICA_WORKER_URL', 'SASONICA_URL_SECRET', 'SASONICA_RUNNER_TOKEN'];
+  const missing = need.filter((k) => !existing[k]);
+  if (missing.length) die(`--local needs ${missing.join(', ')} in ${ENV_FILE}: copy the env file from the machine that made the Worker`);
+  if (!existsSync(KEY_FILE) || !readFileSync(KEY_FILE, 'utf8').trim()) die(`--local needs ${KEY_FILE}, copied from the machine that made the Worker`);
+  say(`Local half only: the Worker at ${existing.SASONICA_WORKER_URL} is already made`);
+  if (!WIN) { chmodSync(CONF, 0o700); chmodSync(KEY_FILE, 0o600); }
+  return { accountId: existing.CLOUDFLARE_ACCOUNT_ID || '', dbId: existing.SASONICA_DB_ID || '',
+           secret: existing.SASONICA_URL_SECRET, runnerToken: existing.SASONICA_RUNNER_TOKEN,
+           workerUrl: existing.SASONICA_WORKER_URL.replace(/\/+$/, '') };
+}
 
 async function joinHosted() {
   const relay = (process.env.SASONICA_RELAY_URL || existing.SASONICA_RELAY_URL || DEFAULT_RELAY).replace(/\/+$/, '');
