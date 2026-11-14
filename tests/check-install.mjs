@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, renderRecord, OAUTH_KV_MARKER, oauthKvLine, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, ownerPolicyBody, accessAppBody,
+import { siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, renderRecord, OAUTH_KV_MARKER, oauthKvLine, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, derivedShellDomain, serverPublicUrl, ownerPolicyBody, accessAppBody,
          winShellCommand, needsWindowsShell } from '../lib/install-lib.mjs';
 import { plist } from '../lib/service-macos.mjs';
 import { taskCommand } from '../lib/service-windows.mjs';
@@ -218,6 +218,23 @@ const cases = {
     assert.match(r.stderr, /--local needs SASONICA_WORKER_URL, SASONICA_URL_SECRET, SASONICA_RUNNER_TOKEN/);
     assert.ok(!/Cloudflare API token/.test(r.stdout), 'it asked for a token');
     rmSync(conf, { recursive: true, force: true });
+  },
+
+  // A new install beside a Sasonica server takes shell-<its public name>.
+  derivedShellDomainShapes() {
+    assert.deepEqual(derivedShellDomain('https://red2-ryer.sasonica.com'),
+      { domain: 'shell-red2-ryer.sasonica.com', zones: ['sasonica.com'] });
+    assert.deepEqual(derivedShellDomain('https://a.b.example.co.uk/'),
+      { domain: 'shell-a.b.example.co.uk', zones: ['b.example.co.uk', 'example.co.uk', 'co.uk'] });
+    assert.equal(derivedShellDomain('https://example.com'), null);         // shell-example.com is another domain
+    assert.equal(derivedShellDomain('http://red2-ryer.sasonica.com'), null);
+    assert.equal(derivedShellDomain(''), null);
+    const files = { '/c/agent-media/server.env': { MEDIA_PUBLIC_URL: 'https://red5-ryer.sasonica.com' },
+                    '/c/agent-media.env': { MEDIA_PUBLIC_URL: 'https://red5.sasonica.com' } };
+    assert.equal(serverPublicUrl('/c', (f) => files[f] ?? {}), 'https://red5-ryer.sasonica.com');
+    delete files['/c/agent-media/server.env'];
+    assert.equal(serverPublicUrl('/c', (f) => files[f] ?? {}), 'https://red5.sasonica.com');
+    assert.equal(serverPublicUrl('/c', () => ({})), '');
   },
 
   // SASONICA_CUSTOM_DOMAIN: the route line in place of the template's marker,

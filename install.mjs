@@ -36,7 +36,7 @@ import path from 'node:path';
 import { cfRequest } from './lib/cloudflare.mjs';
 import { DEFAULT_RELAY, joinRelay, openBrowser } from './lib/hosted-join.mjs';
 import { hex, siteName, urlSecret, readEnvFile, renderEnv, renderShim, commandPlan, isOwnShim, RECORD, renderRecord, connectorUrl,
-         winShellCommand, needsWindowsShell, OAUTH_KV_MARKER, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, oauthKvLine, ownerPolicyBody,
+         winShellCommand, needsWindowsShell, OAUTH_KV_MARKER, CUSTOM_DOMAIN_MARKER, customDomainLine, customDomain, derivedShellDomain, serverPublicUrl, oauthKvLine, ownerPolicyBody,
          accessAppBody } from './lib/install-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -173,7 +173,7 @@ if (signin && !['app', 'access'].includes(signin)) {
 // A name of your own for the Worker (lib/install-lib.mjs customDomain). Kept
 // in the env file, so a re-run keeps the Worker where its connectors are.
 let domain = '';
-try { domain = customDomain(process.env.SASONICA_CUSTOM_DOMAIN || existing.SASONICA_CUSTOM_DOMAIN); }
+try { domain = customDomain(process.env.SASONICA_CUSTOM_DOMAIN === '-' ? '' : (process.env.SASONICA_CUSTOM_DOMAIN || existing.SASONICA_CUSTOM_DOMAIN)); }
 catch (e) { console.error(e.message); process.exit(1); }
 const oauth = signin === 'app' || !!ownerEmail;
 if (ownerEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ownerEmail)) {
@@ -307,6 +307,24 @@ if (accountId) {
   note(`account ${accountId} (${accounts.find((a) => a.id === accountId)?.name ?? '?'})`);
 }
 process.env.CLOUDFLARE_ACCOUNT_ID = accountId;
+
+// --- 2b. a name of its own, by itself ----------------------------------------------
+// A new install beside a Sasonica server with a public name takes shell-<that
+// name> when this account holds its zone (derivedShellDomain); an existing
+// install keeps where its connectors are, and SASONICA_CUSTOM_DOMAIN (or "-"
+// for workers.dev) always wins.
+if (!domain && !existing.SASONICA_WORKER_URL && process.env.SASONICA_CUSTOM_DOMAIN !== '-') {
+  const configHome = process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config');
+  const d = derivedShellDomain(serverPublicUrl(configHome));
+  if (d) {
+    for (const z of d.zones) {
+      let hit = [];
+      try { hit = await cfRequest(`/zones?name=${encodeURIComponent(z)}&account.id=${accountId}`, { token }); } catch { hit = []; }
+      if (hit.length) { domain = d.domain; note(`the Worker takes ${domain}, beside this machine's Sasonica server (zone ${z})`); break; }
+    }
+    if (!domain) note(`not ${d.domain}: this account holds none of ${d.zones.join(', ')}; workers.dev it is`);
+  }
+}
 
 // --- 3. D1 -----------------------------------------------------------------------
 say(`D1 database '${dbName}'`);
